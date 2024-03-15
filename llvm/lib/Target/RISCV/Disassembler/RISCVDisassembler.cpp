@@ -361,6 +361,10 @@ static DecodeStatus decodeXTHeadMemPair(MCInst &Inst, uint32_t Insn,
                                         uint64_t Address,
                                         const MCDisassembler *Decoder);
 
+static DecodeStatus decodeMyMemPair(MCInst &Inst, uint32_t Insn,
+                                        uint64_t Address,
+                                        const MCDisassembler *Decoder);
+
 static DecodeStatus decodeZcmpRlist(MCInst &Inst, unsigned Imm,
                                     uint64_t Address, const void *Decoder);
 
@@ -466,6 +470,32 @@ static DecodeStatus decodeXTHeadMemPair(MCInst &Inst, uint32_t Insn,
     Inst.addOperand(MCOperand::createImm(3));
   else
     Inst.addOperand(MCOperand::createImm(4));
+
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeMyMemPair(MCInst &Inst, uint32_t Insn,
+                                        uint64_t Address,
+                                        const MCDisassembler *Decoder) {
+  uint32_t Rd1 = fieldFromInstruction(Insn, 7, 5);
+  uint32_t Rs1 = fieldFromInstruction(Insn, 15, 5);
+  uint32_t Rd2 = fieldFromInstruction(Insn, 20, 5);
+  uint32_t UImm7 = fieldFromInstruction(Insn, 25, 7);
+  DecodeGPRRegisterClass(Inst, Rd1, Address, Decoder);
+  DecodeGPRRegisterClass(Inst, Rd2, Address, Decoder);
+  DecodeGPRRegisterClass(Inst, Rs1, Address, Decoder);
+  [[maybe_unused]] DecodeStatus Result =
+      decodeUImmOperand<7>(Inst, UImm7, Address, Decoder);
+  assert(Result == MCDisassembler::Success && "Invalid immediate");
+
+  // Disassemble the final operand which is implicit.
+  unsigned Opcode = Inst.getOpcode();
+  bool IsWordOp = (Opcode == RISCV::MY_LWD || Opcode == RISCV::MY_LWUD ||
+                   Opcode == RISCV::MY_SWD);
+  if (IsWordOp)
+    Inst.addOperand(MCOperand::createImm(2));
+  else
+    Inst.addOperand(MCOperand::createImm(3));
 
   return MCDisassembler::Success;
 }

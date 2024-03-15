@@ -3418,6 +3418,19 @@ bool RISCVAsmParser::validateInstruction(MCInst &Inst,
     }
   }
 
+  if (Opcode == RISCV::MY_LDD || Opcode == RISCV::MY_LWUD ||
+      Opcode == RISCV::MY_LWD) {    
+    unsigned Rd1 = Inst.getOperand(0).getReg();
+    unsigned Rd2 = Inst.getOperand(1).getReg();
+    unsigned Rs1 = Inst.getOperand(2).getReg();
+    // The encoding with rd1 == rd2 == rs1 is reserved for XTHead load pair.
+    if (Rs1 == Rd1 && Rs1 == Rd2) {
+      SMLoc Loc = Operands[1]->getStartLoc();
+      return Error(Loc, "The source register and destination registers "
+                        "cannot be equal.");
+    }
+  }
+
   if (Opcode == RISCV::CM_MVSA01) {
     unsigned Rd1 = Inst.getOperand(0).getReg();
     unsigned Rd2 = Inst.getOperand(1).getReg();
@@ -3438,6 +3451,19 @@ bool RISCVAsmParser::validateInstruction(MCInst &Inst,
   } else if (IsTHeadMemPair64 && Inst.getOperand(4).getImm() != 4) {
     SMLoc Loc = Operands.back()->getStartLoc();
     return Error(Loc, "Operand must be constant 4.");
+  }
+
+  bool IsMyMemPair32 = (Opcode == RISCV::MY_LWD || Opcode == RISCV::MY_LWUD || 
+                        Opcode == RISCV::MY_SWD);
+  bool IsMyMemPair64 = (Opcode == RISCV::MY_LDD || Opcode == RISCV::MY_SDD);
+
+  if (IsMyMemPair32 && Inst.getOperand(4).getImm() != 2) {
+    SMLoc Loc = Operands.back()->getStartLoc();
+    return Error(Loc, "Operand must be constant 2.");
+  }
+  if (IsMyMemPair64 && Inst.getOperand(4).getImm() != 3) {
+    SMLoc Loc = Operands.back()->getStartLoc();
+    return Error(Loc, "Operand must be constant 3.");
   }
 
   const MCInstrDesc &MCID = MII.get(Opcode);

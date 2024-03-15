@@ -1425,6 +1425,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
                          ISD::INSERT_VECTOR_ELT, ISD::ABS});
   if (Subtarget.hasVendorXTHeadMemPair())
     setTargetDAGCombine({ISD::LOAD, ISD::STORE});
+  if (Subtarget.hasVendormyMemPair())
+    setTargetDAGCombine({ISD::LOAD, ISD::STORE});
   if (Subtarget.useRVVForFixedLengthVectors())
     setTargetDAGCombine(ISD::BITCAST);
 
@@ -14358,6 +14360,83 @@ static SDValue tryMemPairCombine(SelectionDAG &DAG, LSBaseSDNode *LSNode1,
   }
 }
 
+
+static SDValue performMyMemPairCombine(SDNode *N, TargetLowering::DAGCombinerInfo &DCI) {
+  SelectionDAG &DAG = DCI.DAG;
+  auto &Subtarget = DAG.getMachineFunction().getSubtarget<RISCVSubtarget>();
+
+  LSBaseSDNode *LSNode1 = cast<LSBaseSDNode>(N);
+  EVT MemVT = LSNode1->getMemoryVT();
+  unsigned OpNum = LSNode1->getOpcode() == ISD::LOAD ? 1 : 2;
+
+  // No volatile, indexed or atomic loads/stores.
+  if (!LSNode1->isSimple() || LSNode1->isIndexed())
+    return SDValue();
+
+  // Function to get a base + constant representation from a memory value.
+  auto ExtractBaseAndOffset = [](SDValue Ptr) -> std::pair<SDValue, uint64_t> {
+    if (Ptr->getOpcode() == ISD::ADD)
+      if (auto *C1 = dyn_cast<ConstantSDNode>(Ptr->getOperand(1)))
+        return {Ptr->getOperand(0), C1->getZExtValue()};
+    return {Ptr, 0};
+  };
+
+  auto [Base1, Offset1] = ExtractBaseAndOffset(LSNode1->getOperand(OpNum));
+
+  SDValue Chain = N->getOperand(0);
+  for (SDNode::use_iterator UI = Chain->use_begin(), UE = Chain->use_end();
+       UI != UE; ++UI) {
+    SDUse &Use = UI.getUse();
+    if (Use.getUser() != N  && 
+        Use.getResNo() == 0 &&
+        Use.getUser()->getOpcode() == N->getOpcode()) {
+      LSBaseSDNode *LSNode2 = cast<LSBaseSDNode>(Use.getUser());
+
+      // No volatile, indexed or atomic loads/stores.
+      if (!LSNode2->isSimple() || LSNode2->isIndexed())
+        continue;
+
+      // Check if LSNode1 and LSNode2 have the same type and extension.
+      if (LSNode1->getOpcode() == ISD::LOAD)
+        if (cast<LoadSDNode>(LSNode2)->getExtensionType() !=
+            cast<LoadSDNode>(LSNode1)->getExtensionType())
+          continue;
+
+      if (LSNode1->getMemoryVT() != LSNode2->getMemoryVT())
+        continue;
+
+      auto [Base2, Offset2] = ExtractBaseAndOffset(LSNode2->getOperand(OpNum));
+
+      // Check if the base pointer is the same for both instruction.
+      if (Base1 != Base2)
+        continue;
+
+      // Check if the offsets match the XTHeadMemPair encoding contraints.
+      bool Valid = false;
+      if (MemVT == MVT::i32) {
+        // Check for adjacent i32 values and a 2-bit index.
+        if ((Offset1 + 4 == Offset2) && isShiftedUInt<2, 3>(Offset1))
+          Valid = true;
+      } else if (MemVT == MVT::i64) {
+        // Check for adjacent i64 values and a 2-bit index.
+        if ((Offset1 + 8 == Offset2) && isShiftedUInt<2, 4>(Offset1))
+          Valid = true;
+      }
+
+      if (!Valid)
+        continue;
+
+      // Try to combine.
+      if (SDValue Res =
+              tryMemPairCombine(DAG, LSNode1, LSNode2, Base1, Offset1))
+        return Res;
+    }
+  }
+
+  return SDValue();
+}
+
+
 // Try to combine two adjacent loads/stores to a single pair instruction from
 // the XTHeadMemPair vendor extension.
 static SDValue performMemPairCombine(SDNode *N,
@@ -14365,6 +14444,9 @@ static SDValue performMemPairCombine(SDNode *N,
   SelectionDAG &DAG = DCI.DAG;
   MachineFunction &MF = DAG.getMachineFunction();
   const RISCVSubtarget &Subtarget = MF.getSubtarget<RISCVSubtarget>();
+
+  if (Subtarget.hasVendormyMemPair())
+    return performMyMemPairCombine(N, DCI);
 
   // Target does not support load/store pair.
   if (!Subtarget.hasVendorXTHeadMemPair())
@@ -19452,6 +19534,11 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(TH_LDD)
   NODE_NAME_CASE(TH_SWD)
   NODE_NAME_CASE(TH_SDD)
+  NODE_NAME_CASE(MY_LWD)
+  NODE_NAME_CASE(MY_LWUD)
+  NODE_NAME_CASE(MY_LDD)
+  NODE_NAME_CASE(MY_SWD)
+  NODE_NAME_CASE(MY_SDD)
   NODE_NAME_CASE(VMV_V_V_VL)
   NODE_NAME_CASE(VMV_V_X_VL)
   NODE_NAME_CASE(VFMV_V_F_VL)

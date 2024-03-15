@@ -996,6 +996,13 @@ def FeatureVendorXTHeadMemPair
 def HasVendorXTHeadMemPair : Predicate<"Subtarget->hasVendorXTHeadMemPair()">,
                              AssemblerPredicate<(all_of FeatureVendorXTHeadMemPair),
                                  "'xtheadmempair' (T-Head two-GPR Memory Operations)">;
+def FeatureVendormyMemPair
+    : SubtargetFeature<"mymempair", "HasVendormyMemPair", "true",
+                       "'mymempair' (My two-GPR Memory Operations)">;
+def HasVendormyMemPair : Predicate<"Subtarget->hasVendormyMemPair()">,
+                             AssemblerPredicate<(all_of FeatureVendormyMemPair),
+                                 "'mymempair' (My two-GPR Memory Operations)">;
+
 
 def FeatureVendorXTHeadSync
     : SubtargetFeature<"xtheadsync", "HasVendorXTHeadSync", "true",
