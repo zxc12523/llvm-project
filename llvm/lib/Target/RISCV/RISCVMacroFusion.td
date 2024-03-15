@@ -91,3 +91,40 @@ def TuneLDADDFusion
                    CheckIsImmOperand<2>,
                    CheckImmOperand<2, 0>
                  ]>>;
+
+// Fuse load with add:
+//   sh1add rd, rs1, rs2
+//   ld rd, 0(rd)
+def TuneSH1ADDLDFusion
+  : SimpleFusion<"sh1add-lh-fusion", "HasSH1ADDLHFusion", "Enable SH1ADD+LH macrofusion",
+                 CheckOpcode<[SH1ADD]>,
+                 CheckAll<[
+                   CheckOpcode<[LH]>,
+                   CheckIsImmOperand<2>,
+                   CheckImmOperand<2, 0>
+
+                 ]>>;
+// Fuse load with add:
+//   sh2add rd, rs1, rs2
+//   ld rd, 0(rd)
+def TuneSH2ADDLDFusion
+  : SimpleFusion<"sh2add-lw-fusion", "HasSH2ADDLWFusion", "Enable SH2ADD+LW macrofusion",
+                 CheckOpcode<[SH2ADD]>,
+                 CheckAll<[
+                   CheckOpcode<[LW]>,
+                   CheckIsImmOperand<2>,
+                   CheckImmOperand<2, 0>
+                 ]>>;
+
+// Fuse load with add:
+//   sh3add rd, rs1, rs2
+//   ld rd, 0(rd)
+def TuneSH3ADDLDFusion
+  : SimpleFusion<"sh3add-ld-fusion", "HasSH3ADDLDFusion", "Enable SH3ADD+LD macrofusion",
+                 CheckOpcode<[SH3ADD]>,
+                 CheckAll<[
+                   CheckOpcode<[LD]>,
+                   CheckIsImmOperand<2>,
+                   CheckImmOperand<2, 0>
+                 ]>>;
+
