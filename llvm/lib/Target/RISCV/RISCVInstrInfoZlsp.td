@@ -40,7 +40,7 @@ let Predicates = [HasVendormyMemPair], DecoderNamespace = "myMemPair",
 class myLoadPair<bits<3> func3,string opcodestr>
   : RVInstRBase<func3, OPC_CUSTOM_0,
                 (outs GPR:$rd, GPR:$rs2),
-                (ins GPR:$rs1, uimm7:$uimm7m, uimm7:$const2or3),
+                (ins GPR:$rs1, uimm7:$uimm7, uimm7:$const2or3),
                  opcodestr, "$rd, $rs2, (${rs1}), $uimm7, $const2or3"> {
   bits<7> uimm7;
   let Inst{31-25} = uimm7;
@@ -116,6 +116,6 @@ def : Pat<(my_sdd i64:$rd1, i64:$rd2, i64:$rs1, uimm7_3:$uimm7_3),
 let Predicates = [HasVendormyMemPair] in {
   def : Pat<(my_lwd GPR:$rs1, uimm7_2:$uimm7_2), 
             (MY_LWD GPR:$rs1, uimm7_2:$uimm7_2, 2)>;
-  def : Pat<(my_swd GPR:$rd1, GPR:$rd2, GPR:$rs1, uimm7_3:$uimm7_3), 
-            (MY_SWD GPR:$rd1, GPR:$rd2, GPR:$rs1, uimm7_3:$uimm7_3, 3)>;
+  def : Pat<(my_swd GPR:$rd1, GPR:$rd2, GPR:$rs1, uimm7_2:$uimm7_2), 
+            (MY_SWD GPR:$rd1, GPR:$rd2, GPR:$rs1, uimm7_2:$uimm7_2, 2)>;
 }

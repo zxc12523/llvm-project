@@ -50,6 +50,7 @@ using namespace llvm;
 #define DEBUG_TYPE "riscv-lower"
 
 STATISTIC(NumTailCalls, "Number of tail calls");
+STATISTIC(CombinedMemOp, "Number of Mempair");
 
 static cl::opt<unsigned> ExtensionMaxWebSize(
     DEBUG_TYPE "-ext-max-web-size", cl::Hidden,
@@ -14360,10 +14361,68 @@ static SDValue tryMemPairCombine(SelectionDAG &DAG, LSBaseSDNode *LSNode1,
   }
 }
 
+// Helper function for performMemPairCombine.
+// Try to combine the memory loads/stores LSNode1 and LSNode2
+// into a single memory pair operation.
+static SDValue tryMyMemPairCombine(SelectionDAG &DAG, LSBaseSDNode *LSNode1,
+                                 LSBaseSDNode *LSNode2, SDValue BasePtr,
+                                 uint64_t Imm) {
+  SmallPtrSet<const SDNode *, 32> Visited;
+  SmallVector<const SDNode *, 8> Worklist = {LSNode1, LSNode2};
+
+  if (SDNode::hasPredecessorHelper(LSNode1, Visited, Worklist) ||
+      SDNode::hasPredecessorHelper(LSNode2, Visited, Worklist))
+    return SDValue();
+
+  MachineFunction &MF = DAG.getMachineFunction();
+  const RISCVSubtarget &Subtarget = MF.getSubtarget<RISCVSubtarget>();
+
+  // The new operation has twice the width.
+  MVT XLenVT = Subtarget.getXLenVT();
+  EVT MemVT = LSNode1->getMemoryVT();
+  EVT NewMemVT = (MemVT == MVT::i32) ? MVT::i64 : MVT::i128;
+  MachineMemOperand *MMO = LSNode1->getMemOperand();
+  MachineMemOperand *NewMMO = MF.getMachineMemOperand(
+      MMO, MMO->getPointerInfo(), MemVT == MVT::i32 ? 8 : 16);
+
+  if (LSNode1->getOpcode() == ISD::LOAD) {
+    auto Ext = cast<LoadSDNode>(LSNode1)->getExtensionType();
+    unsigned Opcode;
+    if (MemVT == MVT::i32)
+      Opcode = (Ext == ISD::ZEXTLOAD) ? RISCVISD::MY_LWUD : RISCVISD::MY_LWD;
+    else
+      Opcode = RISCVISD::MY_LDD;
+
+    SDValue Res = DAG.getMemIntrinsicNode(
+        Opcode, SDLoc(LSNode1), DAG.getVTList({XLenVT, XLenVT, MVT::Other}),
+        {LSNode1->getChain(), BasePtr,
+         DAG.getConstant(Imm, SDLoc(LSNode1), XLenVT)},
+        NewMemVT, NewMMO);
+
+    SDValue Node1 =
+        DAG.getMergeValues({Res.getValue(0), Res.getValue(2)}, SDLoc(LSNode1));
+    SDValue Node2 =
+        DAG.getMergeValues({Res.getValue(1), Res.getValue(2)}, SDLoc(LSNode2));
+
+    DAG.ReplaceAllUsesWith(LSNode2, Node2.getNode());
+    return Node1;
+  } else {
+    unsigned Opcode = (MemVT == MVT::i32) ? RISCVISD::MY_SWD : RISCVISD::MY_SDD;
+
+    SDValue Res = DAG.getMemIntrinsicNode(
+        Opcode, SDLoc(LSNode1), DAG.getVTList(MVT::Other),
+        {LSNode1->getChain(), LSNode1->getOperand(1), LSNode2->getOperand(1),
+         BasePtr, DAG.getConstant(Imm, SDLoc(LSNode1), XLenVT)},
+        NewMemVT, NewMMO);
+
+    DAG.ReplaceAllUsesWith(LSNode2, Res.getNode());
+    return Res;
+  }
+}
+
 
 static SDValue performMyMemPairCombine(SDNode *N, TargetLowering::DAGCombinerInfo &DCI) {
   SelectionDAG &DAG = DCI.DAG;
-  auto &Subtarget = DAG.getMachineFunction().getSubtarget<RISCVSubtarget>();
 
   LSBaseSDNode *LSNode1 = cast<LSBaseSDNode>(N);
   EVT MemVT = LSNode1->getMemoryVT();
@@ -14415,11 +14474,11 @@ static SDValue performMyMemPairCombine(SDNode *N, TargetLowering::DAGCombinerInf
       bool Valid = false;
       if (MemVT == MVT::i32) {
         // Check for adjacent i32 values and a 2-bit index.
-        if ((Offset1 + 4 == Offset2) && isShiftedUInt<2, 3>(Offset1))
+        if ((Offset1 + 4 == Offset2) && isShiftedUInt<7, 2>(Offset1))
           Valid = true;
       } else if (MemVT == MVT::i64) {
         // Check for adjacent i64 values and a 2-bit index.
-        if ((Offset1 + 8 == Offset2) && isShiftedUInt<2, 4>(Offset1))
+        if ((Offset1 + 8 == Offset2) && isShiftedUInt<7, 3>(Offset1))
           Valid = true;
       }
 
@@ -14427,9 +14486,10 @@ static SDValue performMyMemPairCombine(SDNode *N, TargetLowering::DAGCombinerInf
         continue;
 
       // Try to combine.
-      if (SDValue Res =
-              tryMemPairCombine(DAG, LSNode1, LSNode2, Base1, Offset1))
+      if (SDValue Res = tryMyMemPairCombine(DAG, LSNode1, LSNode2, Base1, Offset1)) {
+        ++CombinedMemOp;
         return Res;
+      }
     }
   }
 

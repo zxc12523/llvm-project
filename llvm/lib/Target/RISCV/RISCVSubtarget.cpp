@@ -85,7 +85,15 @@ RISCVSubtarget::initializeSubtargetDependencies(const Triple &TT, StringRef CPU,
     TuneInfo = RISCVTuneInfoTable::getRISCVTuneInfo("generic");
   assert(TuneInfo && "TuneInfo shouldn't be nullptr!");
 
-  ParseSubtargetFeatures(CPU, TuneCPU, FS);
+  const char *s = FS.data();
+  std::string feature_string(s);
+  feature_string += ",+mymempair"; 
+  StringRef NewFS(feature_string);
+
+  LLVM_DEBUG(dbgs() << NewFS << '\n';);
+
+  ParseSubtargetFeatures(CPU, TuneCPU, NewFS);
+  
   TargetABI = RISCVABI::computeTargetABI(TT, getFeatureBits(), ABIName);
   RISCVFeatures::validate(TT, getFeatureBits());
   return *this;
