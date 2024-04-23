@@ -128,6 +128,10 @@ bool llvm::fuseInstructionPair(ScheduleDAGInstrs &DAG, SUnit &FirstSU,
     }
   }
 
+  if (!DAG.MF.getProperties().hasProperty(MachineFunctionProperties::Property::NoVRegs)) {
+    SecondSU.getInstr()->setFlag(MachineInstr::MIFlag::Fusible);
+  }
+
   ++NumFused;
   return true;
 }

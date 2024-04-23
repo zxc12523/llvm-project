@@ -92,6 +92,14 @@ def TuneLDADDFusion
                    CheckImmOperand<2, 0>
                  ]>>;
 
+def ShiftNAddFusion
+  : SingleFusion<"shift-n-add-fusion", "HasShiftNAddFusion",
+                 "Enable SLLI+ADD to be fused to shift left by 1/2/3 and add",
+                 SLLI, ADD,
+                 CheckAny<[CheckImmOperand<2, 1>,
+                           CheckImmOperand<2, 2>,
+                           CheckImmOperand<2, 3>]>>;
+
 // Fuse load with add:
 //   sh1add rd, rs1, rs2
 //   ld rd, 0(rd)
