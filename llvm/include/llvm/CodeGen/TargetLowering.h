@@ -674,7 +674,9 @@ public:
   /// to before legalization. This may transform stores that do not exist
   /// earlier (for example, stores created from intrinsics).
   virtual bool mergeStoresAfterLegalization(EVT MemVT) const {
-    return true;
+    // We cannot merge custom stores without target knowledge, since the custom
+    // lowering may be trying to break the store apart.
+    return isOperationLegal(ISD::STORE, MemVT);
   }
 
   /// Returns if it's reasonable to merge stores to MemVT size.
