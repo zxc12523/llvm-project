@@ -303,6 +303,8 @@ private:
   /// defined by this instruction.
   unsigned DebugInstrNum;
 
+  unsigned FusibleOperand = 1;
+
   // Intrusive list support
   friend struct ilist_traits<MachineInstr>;
   friend struct ilist_callback_traits<MachineBasicBlock>;
@@ -408,6 +410,14 @@ public:
     // Filter out the automatically maintained flags.
     unsigned Mask = BundledPred | BundledSucc;
     Flags = (Flags & Mask) | (flags & ~Mask);
+  }
+
+  void setFusibleOperand(unsigned idx) {
+    FusibleOperand = idx;
+  }
+
+  unsigned getFusibleOperand(unsigned idx) {
+    return FusibleOperand;
   }
 
   /// clearFlag - Clear a MI flag.
