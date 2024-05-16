@@ -303,7 +303,7 @@ private:
   /// defined by this instruction.
   unsigned DebugInstrNum;
 
-  unsigned FusibleOperand = 1;
+  MachineInstr* FusibleInstr;
 
   // Intrusive list support
   friend struct ilist_traits<MachineInstr>;
@@ -412,12 +412,12 @@ public:
     Flags = (Flags & Mask) | (flags & ~Mask);
   }
 
-  void setFusibleOperand(unsigned idx) {
-    FusibleOperand = idx;
+  void setFusibleInstr(MachineInstr* Instr) {
+    FusibleInstr = Instr;
   }
 
-  unsigned getFusibleOperand(unsigned idx) {
-    return FusibleOperand;
+  MachineInstr* getFusibleInstr() const {
+    return FusibleInstr;
   }
 
   /// clearFlag - Clear a MI flag.

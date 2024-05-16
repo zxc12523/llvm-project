@@ -907,6 +907,10 @@ void ScheduleDAGMI::schedule() {
 
 /// Apply each ScheduleDAGMutation step in order.
 void ScheduleDAGMI::postProcessDAG() {
+  
+  if (!Mutations.empty())
+    LLVM_DEBUG(dbgs() << "Mutation is not empty\n");
+    
   for (auto &m : Mutations)
     m->apply(this);
 }

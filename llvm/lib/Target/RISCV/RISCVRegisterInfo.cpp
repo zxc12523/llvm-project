@@ -28,7 +28,13 @@
 #define GET_REGINFO_TARGET_DESC
 #include "RISCVGenRegisterInfo.inc"
 
+
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
+
 using namespace llvm;
+
+#define DEBUG_TYPE "regalloc"
 
 static cl::opt<bool> DisableCostPerUse("riscv-disable-cost-per-use",
                                        cl::init(false), cl::Hidden);
@@ -899,28 +905,31 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     const MachineInstr &MI = *MO.getParent();
     unsigned OpIdx = MO.getOperandNo();
     bool NeedGPRC;
-    if (isCompressible(MI, NeedGPRC)) {
-      if (OpIdx == 0 && MI.getOperand(1).isReg()) {
-        if (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
-            MI.getOpcode() == RISCV::ADD_UW ||
-            isCompressibleOpnd(MI.getOperand(2)))
-          tryAddHint(MO, MI.getOperand(1), NeedGPRC);
-        if (MI.isCommutable() && MI.getOperand(2).isReg() &&
-            (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1))))
-          tryAddHint(MO, MI.getOperand(2), NeedGPRC);
-      } else if (OpIdx == 1 && (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
-                                isCompressibleOpnd(MI.getOperand(2)))) {
-        tryAddHint(MO, MI.getOperand(0), NeedGPRC);
-      } else if (MI.isCommutable() && OpIdx == 2 &&
-                 (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1)))) {
-        tryAddHint(MO, MI.getOperand(0), NeedGPRC);
-      }
-    }
+    // if (isCompressible(MI, NeedGPRC)) {
+    //   LLVM_DEBUG(dbgs() << "Compressible\n");
+    //   if (OpIdx == 0 && MI.getOperand(1).isReg()) {
+    //     if (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
+    //         MI.getOpcode() == RISCV::ADD_UW ||
+    //         isCompressibleOpnd(MI.getOperand(2)))
+    //       tryAddHint(MO, MI.getOperand(1), NeedGPRC);
+    //     if (MI.isCommutable() && MI.getOperand(2).isReg() &&
+    //         (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1))))
+    //       tryAddHint(MO, MI.getOperand(2), NeedGPRC);
+    //   } else if (OpIdx == 1 && (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
+    //                             isCompressibleOpnd(MI.getOperand(2)))) {
+    //     tryAddHint(MO, MI.getOperand(0), NeedGPRC);
+    //   } else if (MI.isCommutable() && OpIdx == 2 &&
+    //              (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1)))) {
+    //     tryAddHint(MO, MI.getOperand(0), NeedGPRC);
+    //   }
+    // }
 
-    if(MI.isFusible()) {
-      if (OpIdx == 1 || (OpIdx == 2 && MI.isCommutable())) {
-        tryAddHint(MO, MI.getOperand(0), false);
-      }
+    // MO.dump();
+    // MI.dump();
+    if(MI.isFusible() && OpIdx == 0) {
+      LLVM_DEBUG(dbgs() << "Fusible\n");
+      MachineInstr* FuseMI = MI.getFusibleInstr();
+      tryAddHint(MO, FuseMI->getOperand(0), false);
     }
   }
 
