@@ -44,6 +44,12 @@ static cl::opt<bool>
                          cl::desc("Disable two address hints for register "
                                   "allocation"));
 
+static cl::opt<bool> 
+    EnableMacroFusionRegAllocHints("riscv-macro-fusion-regalloc-hints", 
+                          cl::Hidden, 
+                          cl::init(false), 
+                          cl::desc("Enable same destination hints for register allocation"));
+
 static_assert(RISCV::X1 == RISCV::X0 + 1, "Register list not consecutive");
 static_assert(RISCV::X31 == RISCV::X0 + 31, "Register list not consecutive");
 static_assert(RISCV::F1_H == RISCV::F0_H + 1, "Register list not consecutive");
@@ -813,7 +819,7 @@ bool RISCVRegisterInfo::getRegAllocationHints(
   bool BaseImplRetVal = TargetRegisterInfo::getRegAllocationHints(
       VirtReg, Order, Hints, MF, VRM, Matrix);
 
-  if (!VRM || DisableRegAllocHints)
+  if (!VRM || (DisableRegAllocHints && !EnableMacroFusionRegAllocHints))
     return BaseImplRetVal;
 
   // Add any two address hints after any copy hints.
@@ -905,32 +911,33 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     const MachineInstr &MI = *MO.getParent();
     unsigned OpIdx = MO.getOperandNo();
     bool NeedGPRC;
-    // if (isCompressible(MI, NeedGPRC)) {
-    //   LLVM_DEBUG(dbgs() << "Compressible\n");
-    //   if (OpIdx == 0 && MI.getOperand(1).isReg()) {
-    //     if (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
-    //         MI.getOpcode() == RISCV::ADD_UW ||
-    //         isCompressibleOpnd(MI.getOperand(2)))
-    //       tryAddHint(MO, MI.getOperand(1), NeedGPRC);
-    //     if (MI.isCommutable() && MI.getOperand(2).isReg() &&
-    //         (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1))))
-    //       tryAddHint(MO, MI.getOperand(2), NeedGPRC);
-    //   } else if (OpIdx == 1 && (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
-    //                             isCompressibleOpnd(MI.getOperand(2)))) {
-    //     tryAddHint(MO, MI.getOperand(0), NeedGPRC);
-    //   } else if (MI.isCommutable() && OpIdx == 2 &&
-    //              (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1)))) {
-    //     tryAddHint(MO, MI.getOperand(0), NeedGPRC);
-    //   }
-    // }
 
-    // MO.dump();
-    // MI.dump();
-    if(MI.isFusible() && OpIdx == 0) {
-      LLVM_DEBUG(dbgs() << "Fusible\n");
-      MachineInstr* FuseMI = MI.getFusibleInstr();
-      tryAddHint(MO, FuseMI->getOperand(0), false);
-    }
+    if (!DisableRegAllocHints)
+      if (isCompressible(MI, NeedGPRC)) {
+        LLVM_DEBUG(dbgs() << "Compressible\n");
+        if (OpIdx == 0 && MI.getOperand(1).isReg()) {
+          if (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
+              MI.getOpcode() == RISCV::ADD_UW ||
+              isCompressibleOpnd(MI.getOperand(2)))
+            tryAddHint(MO, MI.getOperand(1), NeedGPRC);
+          if (MI.isCommutable() && MI.getOperand(2).isReg() &&
+              (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1))))
+            tryAddHint(MO, MI.getOperand(2), NeedGPRC);
+        } else if (OpIdx == 1 && (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
+                                  isCompressibleOpnd(MI.getOperand(2)))) {
+          tryAddHint(MO, MI.getOperand(0), NeedGPRC);
+        } else if (MI.isCommutable() && OpIdx == 2 &&
+                  (!NeedGPRC || isCompressibleOpnd(MI.getOperand(1)))) {
+          tryAddHint(MO, MI.getOperand(0), NeedGPRC);
+        }
+      }
+
+    if (EnableMacroFusionRegAllocHints)
+      if(MI.isFusible() && OpIdx == 0) {
+        LLVM_DEBUG(dbgs() << "Fusible\n");
+        MachineInstr* FuseMI = MI.getFusibleInstr();
+        tryAddHint(MO, FuseMI->getOperand(0), false);
+      }
   }
 
   for (MCPhysReg OrderReg : Order)
