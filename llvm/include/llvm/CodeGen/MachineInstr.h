@@ -117,6 +117,7 @@ public:
     NoConvergent = 1 << 17,  // Call does not require convergence guarantees.
     NonNeg = 1 << 18,        // The operand is non-negative.
     Disjoint = 1 << 19,      // Each bit is zero in at least one of the inputs.
+    Fusible = 1 << 20,      
   };
 
 private:
@@ -1065,7 +1066,7 @@ public:
   }
   
   /// Return true if this instruction is fusible.
-  bool isFusible() const { return FusibleInstr != nullptr; }
+  bool isFusible() const { return getFlag(Fusible); }
 
   /// Returns true if the specified instruction has a delay slot
   /// which must be filled by the code generator.

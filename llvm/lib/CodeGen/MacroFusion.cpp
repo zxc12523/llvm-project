@@ -129,6 +129,7 @@ bool llvm::fuseInstructionPair(ScheduleDAGInstrs &DAG, SUnit &FirstSU,
   }
 
   if (!DAG.MF.getProperties().hasProperty(MachineFunctionProperties::Property::NoVRegs)) {
+    SecondSU.getInstr()->setFlag(MachineInstr::MIFlag::Fusible);
     SecondSU.getInstr()->setFusibleInstr(FirstSU.getInstr());
     // SecondSU.getInstr()->tieOperands()
     LLVM_DEBUG(dbgs() << "Adding Fusible flag to "; 
