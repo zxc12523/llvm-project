@@ -542,6 +542,7 @@ Constant *llvm::ConstantFoldShuffleVectorInstruction(Constant *V1, Constant *V2,
     } else if (!MaskEltCount.isScalable())
       return ConstantVector::getSplat(MaskEltCount, Elt);
   }
+
   // Do not iterate on scalable vector. The num of elements is unknown at
   // compile-time.
   if (isa<ScalableVectorType>(V1VTy))
@@ -1720,8 +1721,9 @@ Constant *llvm::ConstantFoldGetElementPtr(Type *PointeeTy, Constant *C,
     if (auto *GV = dyn_cast<GlobalVariable>(C))
       if (!GV->hasExternalWeakLinkage() && GV->getValueType() == PointeeTy &&
           isInBoundsIndices(Idxs))
-        return ConstantExpr::getGetElementPtr(PointeeTy, C, Idxs,
-                                              /*InBounds=*/true, InRange);
+        // TODO(gep_nowrap): Can also set NUW here.
+        return ConstantExpr::getGetElementPtr(
+            PointeeTy, C, Idxs, GEPNoWrapFlags::inBounds(), InRange);
 
   return nullptr;
 }

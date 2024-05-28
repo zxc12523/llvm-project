@@ -721,6 +721,7 @@ cc_binary(
         ":TargetParser",
         ":config",
         ":llvm-tblgen-headers",
+        ":vt_gen",
     ],
 )
 
@@ -1125,6 +1126,8 @@ cc_library(
     ]),
     copts = llvm_copts,
     deps = [
+        ":BitstreamReader",
+        ":BitstreamWriter",
         ":Core",
         ":DebugInfo",
         ":DebugInfoDWARF",
@@ -1879,6 +1882,7 @@ cc_library(
         ":Instrumentation",
         ":MC",
         ":MCParser",
+        ":ObjCARC",
         ":Object",
         ":ProfileData",
         ":Remarks",
